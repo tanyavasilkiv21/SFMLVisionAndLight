@@ -55,6 +55,24 @@ void drawLine(sf::Vector2f p1, sf::Vector2f p2, sf::RenderWindow& window, sf::Co
     line[1].color = color;
     window.draw(line);
 }
+void drawRayWithIntersection(sf::CircleShape& player, sf::Vector2f& corner, std::vector<ShapeEntity>& shapes, sf::RenderWindow& window)
+{
+    sf::Vector2f start(player.getPosition().x + player.getRadius(), player.getPosition().y + player.getRadius());
+    sf::Vector2f end = corner;
+    Intersect closestIntersect = { false, end, 1.f };
+    for (const auto& shape : shapes) {
+        for (size_t i = 0; i < shape.shape.getPointCount(); ++i) {
+            sf::Vector2f p1 = shape.shape.getTransform().transformPoint(shape.shape.getPoint(i));
+            sf::Vector2f p2 = shape.shape.getTransform().transformPoint(shape.shape.getPoint((i + 1) % shape.shape.getPointCount()));
+            Intersect intersect = LineIntersect(start, end, p1, p2);
+            if (intersect.result && intersect.t < closestIntersect.t) {
+                closestIntersect = intersect;
+            }
+        }
+    }
+
+    drawLine(start, closestIntersect.pos, window, sf::Color::Red);
+}
 
 int main() {
     sf::RenderWindow window(sf::VideoMode(800, 600), "Vision and Light");
@@ -71,6 +89,12 @@ int main() {
     player.setPointCount(20);
     player.setFillColor(sf::Color(255, 0, 0));
     player.setRadius(3);
+
+    // Window corners
+    sf::Vector2f topLeft(0, 0);
+    sf::Vector2f topRight(window.getSize().x, 0);
+    sf::Vector2f bottomLeft(0, window.getSize().y);
+    sf::Vector2f bottomRight(window.getSize().x, window.getSize().y);
 
     while (window.isOpen()) {
         sf::Event event;
@@ -90,30 +114,21 @@ int main() {
         for (const auto& shape : shapes) {
             window.draw(shape.shape);
         }
-
         for (const auto& shape : shapes) {
             for (size_t i = 0; i < shape.shape.getPointCount(); ++i) {
                 sf::Vector2f vertex = shape.shape.getTransform().transformPoint(shape.shape.getPoint(i));
-                Intersect closestIntersect = { false, vertex, 1.f };
-
-                for (const auto& otherShape : shapes) {
-                    for (size_t j = 0; j < otherShape.shape.getPointCount(); ++j) {
-                        sf::Vector2f p1 = otherShape.shape.getTransform().transformPoint(otherShape.shape.getPoint(j));
-                        sf::Vector2f p2 = otherShape.shape.getTransform().transformPoint(otherShape.shape.getPoint((j + 1) % otherShape.shape.getPointCount()));
-                        Intersect intersect = LineIntersect(player.getPosition(), vertex, p1, p2);
-                        if (intersect.result && intersect.t < closestIntersect.t) {
-                            closestIntersect = intersect;
-                        }
-                    }
-                }
-
-                drawLine(player.getPosition(), closestIntersect.pos, window, sf::Color::Red);
+                drawRayWithIntersection(player, vertex, shapes, window);
             }
         }
 
+        drawRayWithIntersection(player, topLeft, shapes, window);
+        drawRayWithIntersection(player, topRight, shapes, window);
+        drawRayWithIntersection(player, bottomLeft, shapes, window);
+        drawRayWithIntersection(player, bottomRight, shapes, window);
         window.draw(player);
         window.display();
     }
 
     return 0;
 }
+
