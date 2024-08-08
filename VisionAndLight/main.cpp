@@ -1,15 +1,19 @@
 #include <SFML/Graphics.hpp>
 #include <vector>
 #include <iostream>
+#include <algorithm>
+#include <cmath>
 
 class ShapeEntity
 {
 public:
     sf::ConvexShape shape;
 
-    ShapeEntity(const std::vector<sf::Vector2f>& points, sf::Vector2f pos) {
+    ShapeEntity(const std::vector<sf::Vector2f>& points, sf::Vector2f pos)
+    {
         shape.setPointCount(points.size());
-        for (size_t i = 0; i < points.size(); ++i) {
+        for (size_t i = 0; i < points.size(); ++i)
+        {
             shape.setPoint(i, points[i]);
         }
         shape.setPosition(pos);
@@ -55,26 +59,37 @@ void drawLine(sf::Vector2f p1, sf::Vector2f p2, sf::RenderWindow& window, sf::Co
     line[1].color = color;
     window.draw(line);
 }
-void drawRayWithIntersection(sf::CircleShape& player, sf::Vector2f& corner, std::vector<ShapeEntity>& shapes, sf::RenderWindow& window)
+
+Intersect drawRayWithIntersection(sf::CircleShape& player, sf::Vector2f& corner, std::vector<ShapeEntity>& shapes, sf::RenderWindow& window)
 {
     sf::Vector2f start(player.getPosition().x + player.getRadius(), player.getPosition().y + player.getRadius());
     sf::Vector2f end = corner;
     Intersect closestIntersect = { false, end, 1.f };
-    for (const auto& shape : shapes) {
-        for (size_t i = 0; i < shape.shape.getPointCount(); ++i) {
+    for (const auto& shape : shapes)
+    {
+        for (size_t i = 0; i < shape.shape.getPointCount(); ++i)
+        {
             sf::Vector2f p1 = shape.shape.getTransform().transformPoint(shape.shape.getPoint(i));
             sf::Vector2f p2 = shape.shape.getTransform().transformPoint(shape.shape.getPoint((i + 1) % shape.shape.getPointCount()));
             Intersect intersect = LineIntersect(start, end, p1, p2);
-            if (intersect.result && intersect.t < closestIntersect.t) {
+            if (intersect.result && intersect.t < closestIntersect.t)
+            {
                 closestIntersect = intersect;
             }
         }
     }
 
     drawLine(start, closestIntersect.pos, window, sf::Color::Red);
+    return closestIntersect;
 }
 
-int main() {
+float angleBetween(sf::Vector2f p1, sf::Vector2f p2)
+{
+    return std::atan2(p2.y - p1.y, p2.x - p1.x);
+}
+
+int main()
+{
     sf::RenderWindow window(sf::VideoMode(800, 600), "Vision and Light");
     window.setFramerateLimit(60);
     std::vector<ShapeEntity> shapes;
@@ -96,14 +111,18 @@ int main() {
     sf::Vector2f bottomLeft(0, window.getSize().y);
     sf::Vector2f bottomRight(window.getSize().x, window.getSize().y);
 
-    while (window.isOpen()) {
+    while (window.isOpen())
+    {
         sf::Event event;
-        while (window.pollEvent(event)) {
-            if (event.type == sf::Event::Closed) {
+        while (window.pollEvent(event))
+        {
+            if (event.type == sf::Event::Closed)
+            {
                 window.close();
             }
 
-            if (event.type == sf::Event::MouseMoved) {
+            if (event.type == sf::Event::MouseMoved)
+            {
                 sf::Vector2i position = sf::Mouse::getPosition(window);
                 player.setPosition(static_cast<float>(position.x) - player.getRadius(), static_cast<float>(position.y) - player.getRadius());
             }
@@ -111,24 +130,55 @@ int main() {
 
         window.clear(sf::Color::White);
 
-        for (const auto& shape : shapes) {
+        for (const auto& shape : shapes)
+        {
             window.draw(shape.shape);
         }
-        for (const auto& shape : shapes) {
-            for (size_t i = 0; i < shape.shape.getPointCount(); ++i) {
+
+        std::vector<sf::Vector2f> intersectPos;
+        intersectPos.push_back(drawRayWithIntersection(player, topLeft, shapes, window).pos);
+        intersectPos.push_back(drawRayWithIntersection(player, topRight, shapes, window).pos);
+        intersectPos.push_back(drawRayWithIntersection(player, bottomLeft, shapes, window).pos);
+        intersectPos.push_back(drawRayWithIntersection(player, bottomRight, shapes, window).pos);
+        for (const auto& shape : shapes)
+        {
+            for (size_t i = 0; i < shape.shape.getPointCount(); ++i)
+            {
                 sf::Vector2f vertex = shape.shape.getTransform().transformPoint(shape.shape.getPoint(i));
-                drawRayWithIntersection(player, vertex, shapes, window);
+                auto intersect = drawRayWithIntersection(player, vertex, shapes, window);
+                intersectPos.push_back(intersect.pos);
             }
         }
+        std::sort(intersectPos.begin(), intersectPos.end(), [&player](const sf::Vector2f& a, const sf::Vector2f& b)
+            {
+                sf::Vector2f playerCenter(player.getPosition().x + player.getRadius(), player.getPosition().y + player.getRadius());
+                return angleBetween(playerCenter, a) < angleBetween(playerCenter, b);
+            });
 
-        drawRayWithIntersection(player, topLeft, shapes, window);
-        drawRayWithIntersection(player, topRight, shapes, window);
-        drawRayWithIntersection(player, bottomLeft, shapes, window);
-        drawRayWithIntersection(player, bottomRight, shapes, window);
+        for (size_t i = 0; i < intersectPos.size() ; i++)
+        {
+            sf::ConvexShape polygon;
+            polygon.setPointCount(3);
+            if (i == intersectPos.size() - 1)
+            {
+                polygon.setPoint(0, intersectPos[0]);
+                polygon.setPoint(1, player.getPosition());
+                polygon.setPoint(2, intersectPos[i]);
+            }
+            else
+            {
+
+                polygon.setPoint(0, intersectPos[i]);
+                polygon.setPoint(1, player.getPosition());
+                polygon.setPoint(2, intersectPos[i + 1]);
+            }
+            polygon.setFillColor(sf::Color(255, 0, 0, 40));
+            window.draw(polygon);
+        }
+        
         window.draw(player);
         window.display();
     }
 
     return 0;
 }
-
