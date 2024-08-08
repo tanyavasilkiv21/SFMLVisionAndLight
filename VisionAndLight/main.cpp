@@ -1,6 +1,6 @@
-#include <iostream>
 #include <SFML/Graphics.hpp>
 #include <vector>
+#include <iostream>
 
 class ShapeEntity
 {
@@ -23,27 +23,27 @@ struct Intersect
 {
     bool result;
     sf::Vector2f pos;
+    float t;
 };
 
 float crossProduct(sf::Vector2f a, sf::Vector2f b)
 {
-    return ((a.x * b.y) - (a.y * b.x));
+    return (a.x * b.y - a.y * b.x);
 }
+
 Intersect LineIntersect(sf::Vector2f a, sf::Vector2f b, sf::Vector2f c, sf::Vector2f d)
 {
     auto r = b - a;
     auto s = d - c;
     float rxs = crossProduct(r, s);
     auto cma = c - a;
-    float t = (crossProduct(cma, s) / rxs);
-    float u = (crossProduct(cma, r) / rxs);
-
-    std::cout << t << "   " << u << std::endl;
-    if (t <= 1 && t >= 0 && u <= 1 && u >= 0)
+    float t = crossProduct(cma, s) / rxs;
+    float u = crossProduct(cma, r) / rxs;
+    if (rxs != 0 && t >= 0 && t <= 1 && u >= 0 && u <= 1)
     {
-        return { true, sf::Vector2f(a.x + t * r.x, a.y + t * r.y) };
+        return { true, a + t * r, t };
     }
-    return  { false, sf::Vector2f(0,0) };
+    return { false, sf::Vector2f(0, 0), 0 };
 }
 
 void drawLine(sf::Vector2f p1, sf::Vector2f p2, sf::RenderWindow& window, sf::Color color)
@@ -72,9 +72,6 @@ int main() {
     player.setFillColor(sf::Color(255, 0, 0));
     player.setRadius(3);
 
-    float centerX = window.getSize().x / 2;
-    float centerY = window.getSize().y / 2;
-    sf::Vector2f centerOfWindow(centerX, centerY);
     while (window.isOpen()) {
         sf::Event event;
         while (window.pollEvent(event)) {
@@ -89,39 +86,32 @@ int main() {
         }
 
         window.clear(sf::Color::White);
-        window.draw(player);
-        Intersect intersect;
+
         for (const auto& shape : shapes) {
             window.draw(shape.shape);
         }
+
         for (const auto& shape : shapes) {
-            for (int i = 0; i < shape.shape.getPointCount(); i++)
-            {
-                if (i == shape.shape.getPointCount() - 1)
-                {
-                    intersect = LineIntersect(player.getPosition(), centerOfWindow, shape.shape.getTransform().transformPoint(shape.shape.getPoint(0)),
-                        shape.shape.getTransform().transformPoint(shape.shape.getPoint(i)));
+            for (size_t i = 0; i < shape.shape.getPointCount(); ++i) {
+                sf::Vector2f vertex = shape.shape.getTransform().transformPoint(shape.shape.getPoint(i));
+                Intersect closestIntersect = { false, vertex, 1.f };
+
+                for (const auto& otherShape : shapes) {
+                    for (size_t j = 0; j < otherShape.shape.getPointCount(); ++j) {
+                        sf::Vector2f p1 = otherShape.shape.getTransform().transformPoint(otherShape.shape.getPoint(j));
+                        sf::Vector2f p2 = otherShape.shape.getTransform().transformPoint(otherShape.shape.getPoint((j + 1) % otherShape.shape.getPointCount()));
+                        Intersect intersect = LineIntersect(player.getPosition(), vertex, p1, p2);
+                        if (intersect.result && intersect.t < closestIntersect.t) {
+                            closestIntersect = intersect;
+                        }
+                    }
                 }
-                else
-                {
-                    intersect = LineIntersect(player.getPosition(), centerOfWindow, shape.shape.getTransform().transformPoint(shape.shape.getPoint(i + 1)),
-                        shape.shape.getTransform().transformPoint(shape.shape.getPoint(i)));
-                }
-                if (intersect.result == true)
-                {
-                    break;
-                }
-            }
-            if (intersect.result == true)
-            {
-                break;
+
+                drawLine(player.getPosition(), closestIntersect.pos, window, sf::Color::Red);
             }
         }
-        if (intersect.result == true)
-        {
-            player.setPosition(intersect.pos);
-        }
-        drawLine(centerOfWindow, player.getPosition(), window, sf::Color::Red);
+
+        window.draw(player);
         window.display();
     }
 
