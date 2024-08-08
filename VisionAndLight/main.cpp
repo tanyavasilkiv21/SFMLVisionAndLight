@@ -1,8 +1,6 @@
 #include <SFML/Graphics.hpp>
 #include <vector>
 #include <iostream>
-#include <algorithm>
-#include <cmath>
 
 class ShapeEntity
 {
@@ -60,11 +58,26 @@ void drawLine(sf::Vector2f p1, sf::Vector2f p2, sf::RenderWindow& window, sf::Co
     window.draw(line);
 }
 
-Intersect drawRayWithIntersection(sf::CircleShape& player, sf::Vector2f& corner, std::vector<ShapeEntity>& shapes, sf::RenderWindow& window)
+sf::Vector2f rotateVector(const sf::Vector2f& vec, float angle)
+{
+    float cosTheta = std::cos(angle);
+    float sinTheta = std::sin(angle);
+    return sf::Vector2f(
+        vec.x * cosTheta - vec.y * sinTheta,
+        vec.x * sinTheta + vec.y * cosTheta
+    );
+}
+
+Intersect drawRayWithIntersection(sf::CircleShape& player, sf::Vector2f& target, std::vector<ShapeEntity>& shapes, sf::RenderWindow& window, float angleOffset = 0)
 {
     sf::Vector2f start(player.getPosition().x + player.getRadius(), player.getPosition().y + player.getRadius());
-    sf::Vector2f end = corner;
+    sf::Vector2f direction = target - start;
+    direction = rotateVector(direction, angleOffset);
+
+    sf::Vector2f end = start + 1000.0f * direction;
+
     Intersect closestIntersect = { false, end, 1.f };
+
     for (const auto& shape : shapes)
     {
         for (size_t i = 0; i < shape.shape.getPointCount(); ++i)
@@ -78,8 +91,7 @@ Intersect drawRayWithIntersection(sf::CircleShape& player, sf::Vector2f& corner,
             }
         }
     }
-
-    drawLine(start, closestIntersect.pos, window, sf::Color::Red);
+    //drawLine(start, closestIntersect.pos, window, sf::Color::Red);
     return closestIntersect;
 }
 
@@ -136,29 +148,37 @@ int main()
         }
 
         std::vector<sf::Vector2f> intersectPos;
-        intersectPos.push_back(drawRayWithIntersection(player, topLeft, shapes, window).pos);
-        intersectPos.push_back(drawRayWithIntersection(player, topRight, shapes, window).pos);
-        intersectPos.push_back(drawRayWithIntersection(player, bottomLeft, shapes, window).pos);
-        intersectPos.push_back(drawRayWithIntersection(player, bottomRight, shapes, window).pos);
+
+        std::vector<sf::Vector2f> corners = { topLeft, topRight, bottomLeft, bottomRight };
+
+        for (auto& corner : corners)
+        {
+            intersectPos.push_back(drawRayWithIntersection(player, corner, shapes, window).pos);
+        }
+
         for (const auto& shape : shapes)
         {
             for (size_t i = 0; i < shape.shape.getPointCount(); ++i)
             {
                 sf::Vector2f vertex = shape.shape.getTransform().transformPoint(shape.shape.getPoint(i));
-                auto intersect = drawRayWithIntersection(player, vertex, shapes, window);
-                intersectPos.push_back(intersect.pos);
+                intersectPos.push_back(drawRayWithIntersection(player, vertex, shapes, window, 0.00001f).pos);
+                intersectPos.push_back(drawRayWithIntersection(player, vertex, shapes, window).pos);
+                intersectPos.push_back(drawRayWithIntersection(player, vertex, shapes, window, -0.00001f).pos);
             }
         }
-        std::sort(intersectPos.begin(), intersectPos.end(), [&player](const sf::Vector2f& a, const sf::Vector2f& b)
+
+        sf::Vector2f playerCenter = player.getPosition() + sf::Vector2f(player.getRadius(), player.getRadius());
+
+        std::sort(intersectPos.begin(), intersectPos.end(), [&playerCenter](const sf::Vector2f& a, const sf::Vector2f& b)
             {
-                sf::Vector2f playerCenter(player.getPosition().x + player.getRadius(), player.getPosition().y + player.getRadius());
                 return angleBetween(playerCenter, a) < angleBetween(playerCenter, b);
             });
 
-        for (size_t i = 0; i < intersectPos.size() ; i++)
+        for (size_t i = 0; i < intersectPos.size(); i++)
         {
             sf::ConvexShape polygon;
             polygon.setPointCount(3);
+            //std::cout << intersectPos[i].x << " " << intersectPos[i].y << std::endl;
             if (i == intersectPos.size() - 1)
             {
                 polygon.setPoint(0, intersectPos[0]);
@@ -167,7 +187,6 @@ int main()
             }
             else
             {
-
                 polygon.setPoint(0, intersectPos[i]);
                 polygon.setPoint(1, player.getPosition());
                 polygon.setPoint(2, intersectPos[i + 1]);
@@ -175,9 +194,10 @@ int main()
             polygon.setFillColor(sf::Color(255, 0, 0, 40));
             window.draw(polygon);
         }
-        
+
         window.draw(player);
         window.display();
+
     }
 
     return 0;
