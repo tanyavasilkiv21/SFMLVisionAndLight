@@ -68,7 +68,8 @@ sf::Vector2f rotateVector(const sf::Vector2f& vec, float angle)
     );
 }
 
-Intersect drawRayWithIntersection(sf::CircleShape& player, sf::Vector2f& target, std::vector<ShapeEntity>& shapes, sf::RenderWindow& window, float angleOffset = 0)
+Intersect drawRayWithIntersection(sf::CircleShape& player, sf::Vector2f& target, std::vector<ShapeEntity>& shapes, sf::RenderWindow& window, 
+                                  float angleOffset = 0, bool isLineDraw = 0)
 {
     sf::Vector2f start(player.getPosition().x + player.getRadius(), player.getPosition().y + player.getRadius());
     sf::Vector2f direction = target - start;
@@ -91,7 +92,10 @@ Intersect drawRayWithIntersection(sf::CircleShape& player, sf::Vector2f& target,
             }
         }
     }
-    //drawLine(start, closestIntersect.pos, window, sf::Color::Red);
+    if (isLineDraw)
+    {
+        drawLine(start, closestIntersect.pos, window, sf::Color::Red);
+    }
     return closestIntersect;
 }
 
@@ -117,6 +121,9 @@ int main()
     player.setFillColor(sf::Color(255, 0, 0));
     player.setRadius(3);
 
+    bool isLinesDraw = false;
+    bool isPolygonDraw = true;
+
     // Window corners
     sf::Vector2f topLeft(0, 0);
     sf::Vector2f topRight(window.getSize().x, 0);
@@ -137,6 +144,23 @@ int main()
             {
                 sf::Vector2i position = sf::Mouse::getPosition(window);
                 player.setPosition(static_cast<float>(position.x) - player.getRadius(), static_cast<float>(position.y) - player.getRadius());
+            }
+            if (event.type == sf::Event::KeyPressed)
+            {
+                switch (event.key.code)
+                {
+                case sf::Keyboard::R:
+                {
+                    isLinesDraw = !isLinesDraw;
+                    break;
+                }
+                case sf::Keyboard::T:
+                {
+                    isPolygonDraw = !isPolygonDraw;
+                    break;
+                }
+                }
+
             }
         }
 
@@ -160,10 +184,21 @@ int main()
         {
             for (size_t i = 0; i < shape.shape.getPointCount(); ++i)
             {
-                sf::Vector2f vertex = shape.shape.getTransform().transformPoint(shape.shape.getPoint(i));
-                intersectPos.push_back(drawRayWithIntersection(player, vertex, shapes, window, 0.00001f).pos);
-                intersectPos.push_back(drawRayWithIntersection(player, vertex, shapes, window).pos);
-                intersectPos.push_back(drawRayWithIntersection(player, vertex, shapes, window, -0.00001f).pos);
+                if (isLinesDraw)
+                {
+                    sf::Vector2f vertex = shape.shape.getTransform().transformPoint(shape.shape.getPoint(i));
+                    intersectPos.push_back(drawRayWithIntersection(player, vertex, shapes, window, 0.00001f, true).pos);
+                    intersectPos.push_back(drawRayWithIntersection(player, vertex, shapes, window, 0, true).pos);
+                    intersectPos.push_back(drawRayWithIntersection(player, vertex, shapes, window, -0.00001f, true).pos);
+                }
+                else 
+                {
+                    sf::Vector2f vertex = shape.shape.getTransform().transformPoint(shape.shape.getPoint(i));
+                    intersectPos.push_back(drawRayWithIntersection(player, vertex, shapes, window, 0.00001f).pos);
+                    intersectPos.push_back(drawRayWithIntersection(player, vertex, shapes, window).pos);
+                    intersectPos.push_back(drawRayWithIntersection(player, vertex, shapes, window, -0.00001f).pos);
+                }
+                
             }
         }
 
@@ -174,25 +209,27 @@ int main()
                 return angleBetween(playerCenter, a) < angleBetween(playerCenter, b);
             });
 
-        for (size_t i = 0; i < intersectPos.size(); i++)
+        if (isPolygonDraw)
         {
-            sf::ConvexShape polygon;
-            polygon.setPointCount(3);
-            //std::cout << intersectPos[i].x << " " << intersectPos[i].y << std::endl;
-            if (i == intersectPos.size() - 1)
+            for (size_t i = 0; i < intersectPos.size(); i++)
             {
-                polygon.setPoint(0, intersectPos[0]);
-                polygon.setPoint(1, player.getPosition());
-                polygon.setPoint(2, intersectPos[i]);
+                sf::ConvexShape polygon;
+                polygon.setPointCount(3);
+                if (i == intersectPos.size() - 1)
+                {
+                    polygon.setPoint(0, intersectPos[0]);
+                    polygon.setPoint(1, player.getPosition());
+                    polygon.setPoint(2, intersectPos[i]);
+                }
+                else
+                {
+                    polygon.setPoint(0, intersectPos[i]);
+                    polygon.setPoint(1, player.getPosition());
+                    polygon.setPoint(2, intersectPos[i + 1]);
+                }
+                polygon.setFillColor(sf::Color(255, 0, 0, 40));
+                window.draw(polygon);
             }
-            else
-            {
-                polygon.setPoint(0, intersectPos[i]);
-                polygon.setPoint(1, player.getPosition());
-                polygon.setPoint(2, intersectPos[i + 1]);
-            }
-            polygon.setFillColor(sf::Color(255, 0, 0, 40));
-            window.draw(polygon);
         }
 
         window.draw(player);
